@@ -46,16 +46,16 @@ class DataHandler:
         self.behavior_mats = {}
         self.behavior_mats_2 = {}
         self.behaviors_data = {}
-        # self.f_laps = {} # 存储各行为的位置编码特征
 
-        for i in range(0, len(self.behaviors)):# 遍历每一种用户行为
+
+        for i in range(0, len(self.behaviors)):
             with open(self.train_file + self.behaviors[i] + '.pkl', 'rb') as fs:
                 data = pickle.load(fs)
                 
                 if self.behaviors[i] == 'buy':
-                    self.train_mat = data # 把购买行为矩阵作为主训练矩阵
-                    self.trainLabel = 1 * (self.train_mat != 0) # 转为0-1矩阵（有交互=1，无交互=0）
-                    self.labelP = np.squeeze(np.array(np.sum(self.trainLabel, axis=0)))# 按列求和，得到每个物品被交互的总次数（用于权重）
+                    self.train_mat = data 
+                    self.trainLabel = 1 * (self.train_mat != 0) 
+                    self.labelP = np.squeeze(np.array(np.sum(self.trainLabel, axis=0)))
                     continue
                 self.behaviors_data[i] = 1*(data != 0)
                 if data.get_shape()[0] > self.user_num:
@@ -69,23 +69,21 @@ class DataHandler:
         self.test_mat = pickle.load(open(self.test_file, 'rb'))
         self.userNum = self.behaviors_data[0].shape[0]
         self.itemNum = self.behaviors_data[0].shape[1]
-        self._data2mat() # 调用函数把行为数据转为标准矩阵格式
+        self._data2mat() 
         if test_mode == 'muti':
             self.target_adj = self._dataTargetmat()
         elif test_mode == 'lightgcn':
             self.target_adj = self._make_bitorch_adj(self.train_mat)
-        else: # 默认模式（图位置编码模式）
+        else: 
 
-            # transform = RandomWalkPE(k=args.con_dim, feat_name='lap_pos_enc')
-            # 自定义随机游走位置编码，维度为args.con_dim
-            # transform = CustomRandomWalkPE(k=args.con_dim, feat_name='lap_pos_enc')
+            
             self.struct_encoder = HiESEncoder(dim=args.con_dim, feat_name='lap_pos_enc')
-            # transform = LapPE(k=args.con_dim, feat_name='lap_pos_enc')
+            
 
 
             self.target_adj = self.makeBiAdj(self.train_mat,self.userNum,self.itemNum)
 
-            # transform(self.target_adj)
+            
             num_nodes = self.target_adj.num_nodes()
             edges = self.target_adj.edges()
             src = edges[0].cpu().numpy()
@@ -95,43 +93,40 @@ class DataHandler:
             spectral_tar = self.struct_encoder.compute_spectral_embedding(adj).to(device)
             self.f_laps_static_target = (stats_tar, spectral_tar)
             self.target_adj = self.target_adj.to(device)
-            # self.f_lap1 = self.target_adj.ndata['lap_pos_enc'] # 取出图节点的位置编码特征
+            
 
-            self.f_laps_static = {}  # 缓存静态特征
-            for i in range(0, len(self.behaviors_data)):# 遍历所有行为，为每个行为构建图并计算位置编码
+            self.f_laps_static = {}  
+            for i in range(0, len(self.behaviors_data)):
 
                 self.behavior_mats[i] = self.makeBiAdj(self.behaviors_data[i],self.userNum,self.itemNum).to(device)
-                tmp = self.behavior_mats[i].adj()# 获取邻接矩阵
-                self.behavior_mats_2[i] = (tmp @ tmp).to(device)# 计算邻接矩阵的平方（二阶邻居）
+                tmp = self.behavior_mats[i].adj()
+                self.behavior_mats_2[i] = (tmp @ tmp).to(device)
 
                 num_nodes = self.behavior_mats[i].num_nodes()
                 edges = self.behavior_mats[i].edges()
                 src = edges[0].cpu().numpy()
                 dst = edges[1].cpu().numpy()
                 adj = sp.csr_matrix((np.ones(len(src)), (src, dst)), shape=(num_nodes, num_nodes))
-                # 局部统计
+                
                 stats = self.struct_encoder.compute_local_statistics(adj).to(device)
-                # 谱特征
+                
                 spectral = self.struct_encoder.compute_spectral_embedding(adj).to(device)
                 self.f_laps_static[i] = (stats, spectral)
-                # transform(self.behavior_mats[i])
-                # self.f_laps[i] = self.behavior_mats[i].ndata['lap_pos_enc'] # 保存位置编码
-            # self.f_laps[i+1] = self.f_lap1# 把主图（购买）的编码也存入f_laps
-            # DataHandler(1).py
+               
 
 
 
         self.beh_degree_list = []
-        # 遍历每个行为，计算用户交互次数（度）并放到GPU
+        
         for i in range(len(self.behaviors_data)):
             self.beh_degree_list.append(torch.tensor(((self.behaviors_data[i] != 0) * 1).sum(axis=-1)).cuda())
 
-    def _data2mat(self):# 把行为数据转为模型可用的矩阵格式
+    def _data2mat(self):
         time = datetime.datetime.now()
         print("Start building: ", time)
         for i in range(0, len(self.behaviors_data)):
             self.behaviors_data[i] = 1*(self.behaviors_data[i] != 0)
-            self.behavior_mats[i] = self._get_use(self.behaviors_data[i])# 归一化并转为PyTorch稀疏张量
+            self.behavior_mats[i] = self._get_use(self.behaviors_data[i])
         time = datetime.datetime.now()
         print("End building: ", time)
     def _dataTargetmat(self):
@@ -139,24 +134,24 @@ class DataHandler:
          target_adj = self._get_use(target_adj)
          return target_adj
 
-    def _get_use(self, behaviors_data):# 对行为矩阵做归一化并转为PyTorch张量，返回A、AT、A_ori
+    def _get_use(self, behaviors_data):
         behavior_mats = {}
         behaviors_data = (behaviors_data != 0) * 1
-        behavior_mats['A'] = self._matrix_to_tensor(self._normalize_adj(behaviors_data))# 归一化邻接矩阵并转为torch稀疏张量
+        behavior_mats['A'] = self._matrix_to_tensor(self._normalize_adj(behaviors_data))
         behavior_mats['AT'] = self._matrix_to_tensor(self._normalize_adj(behaviors_data.T))
         behavior_mats['A_ori'] = None
         return behavior_mats
 
-    def _normalize_adj(self, adj):# 对称归一化邻接矩阵（GCN经典归一化方法）
+    def _normalize_adj(self, adj):
         """Symmetrically normalize adjacency matrix."""
         adj = sp.coo_matrix(adj)
         rowsum = np.array(adj.sum(1))
-        rowsum_diag = sp.diags(np.power(rowsum+1e-8, -0.5).flatten())# 构造D^(-0.5)对角矩阵
+        rowsum_diag = sp.diags(np.power(rowsum+1e-8, -0.5).flatten())
         colsum = np.array(adj.sum(0))
         colsum_diag = sp.diags(np.power(colsum+1e-8, -0.5).flatten())
-        return rowsum_diag*adj*colsum_diag# 返回 D^(-0.5) * A * D^(-0.5)
+        return rowsum_diag*adj*colsum_diag
 
-    def _matrix_to_tensor(self, cur_matrix):# 把scipy稀疏矩阵转为torch稀疏张量
+    def _matrix_to_tensor(self, cur_matrix):
         if type(cur_matrix) != sp.coo_matrix:
             cur_matrix = cur_matrix.tocoo()
         indices = torch.from_numpy(np.vstack((cur_matrix.row, cur_matrix.col)).astype(np.int64))
@@ -164,7 +159,7 @@ class DataHandler:
         shape = torch.Size(cur_matrix.shape)
         return torch.sparse.FloatTensor(indices, values, shape).to(torch.float32).cuda()
     
-    def makeBiAdj(self, mat,n_user,n_item):# 构建用户-物品二部图（DGL图）
+    def makeBiAdj(self, mat,n_user,n_item):
         a = sp.csr_matrix((n_user, n_user))
         b = sp.csr_matrix((n_item, n_item))
         mat = sp.vstack([sp.hstack([a, mat]), sp.hstack([mat.transpose(), b])])
@@ -281,7 +276,7 @@ class TstData(data.Dataset):
         return self.tstUsrs[idx], np.reshape(self.csrmat[self.tstUsrs[idx]].toarray(), [-1])
 
 
-class AllRankTestData(data.Dataset):# 全排序测试数据集类（推荐系统标准测试）
+class AllRankTestData(data.Dataset):
     def __init__(self, coomat, trn_mat):
         self.csrmat = (trn_mat.tocsr() != 0) * 1.0
 
@@ -306,7 +301,7 @@ class AllRankTestData(data.Dataset):# 全排序测试数据集类（推荐系统
         return pck_user, pck_mask
 
 
-class PairwiseTrnData(data.Dataset):# 成对训练数据集类（BPR、NCF等成对排序模型用）
+class PairwiseTrnData(data.Dataset):
 	def __init__(self, coomat):
 		self.rows = coomat.row
 		self.cols = coomat.col
@@ -329,7 +324,7 @@ class PairwiseTrnData(data.Dataset):# 成对训练数据集类（BPR、NCF等成
 		return self.rows[idx], self.cols[idx], self.negs[idx]
      
 
-class DiffusionData(data.Dataset):# 扩散模型专用数据集（时间/序列扩散）
+class DiffusionData(data.Dataset):
     def __init__(self,y_data):
         self.y_data = y_data
         self.x_data = np.arange(0,len(y_data))
