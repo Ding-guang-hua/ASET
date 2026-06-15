@@ -91,7 +91,7 @@ class DataHandler:
             self.feature_list = t.FloatTensor(features_list).to(device)
 
             self.struct_encoder = HiESEncoder(dim=args.con_dim, feat_name='lap_pos_enc')
-            # apa->ava->ata  Ma 0.9318+0.0027 Mi 0.9365+0.0025 Ma 0.9278+0.0027 Mi 0.9304+0.0028 Ma 0.9377+0.0020 Mi 0.9435+0.0018
+            
             self.hete_adj1 = dgl.from_scipy(ata_mat).to(device)
             tmp = self.hete_adj1.adj()
             self.hete_adj1_2 = (tmp @ tmp).to(device)
@@ -128,15 +128,7 @@ class DataHandler:
             spectral = self.struct_encoder.compute_spectral_embedding(adj).to(device)
             self.f_laps_static3 = (stats, spectral)
 
-            #transform = LapPE(k=args.con_dim, feat_name='lap_pos_enc')
-            # transform = RandomWalkPE(k=args.con_dim, feat_name='lap_pos_enc')
-            # transform(self.hete_adj1)
-            # transform(self.hete_adj2)
-            # transform(self.hete_adj3)
-            # self.f_lap1 = self.hete_adj1.ndata['lap_pos_enc']
-            # self.f_lap2 = self.hete_adj2.ndata['lap_pos_enc']
-            # self.f_lap3 = self.hete_adj3.ndata['lap_pos_enc']
-
+           
 
             self.train_idx = train
             self.val_idx = val
@@ -154,12 +146,7 @@ class DataHandler:
             self.feature_list = t.FloatTensor(features_list).to(device)
 
             self.struct_encoder = HiESEncoder(dim=args.con_dim, feat_name='lap_pos_enc')
-            # pos->prp->pap
-            # pap->prp->pos  pap->prp->pos
-            # pap->prp->pos  Ma  0.6639+0.0143  Mi 0.7555+0.0222  Ma 0.7146+0.0118  Mi 0.7902+0.0146 Ma 0.7207+0.0104 Mi 0.7870+0.0135
-            #  验证  Ma 0.6667+0.0145 Mi  0.7493+0.0193Ma  0.7158+0.0116Mi 0.7931+0.0093 Ma0.7169+0.0122  Mi0.7914+0.0164
-            # repeat=20   Ma 0.6731+0.0111Mi 0.7509+0.0153 Ma0.7169+0.0115  Mi 0.7933+0.0135 Ma  0.7223+0.0083Mi0.7934+0.0104
-            #ma 0.6698+0.0139 mi  0.7442+0.0138  ma0.7166+0.0080  mi 0.7924+0.0095 ma 0.7202+0.0060 mi 0.7936+0.0114
+            
             self.hete_adj1 = dgl.from_scipy(pos_mat).to(device)
             tmp = self.hete_adj1.adj()
             self.hete_adj1_2 = (tmp @ tmp).to(device)
@@ -196,13 +183,7 @@ class DataHandler:
             spectral = self.struct_encoder.compute_spectral_embedding(adj).to(device)
             self.f_laps_static3 = (stats, spectral)
 
-            # transform = RandomWalkPE(k=args.con_dim, feat_name='lap_pos_enc')
-            # transform(self.hete_adj1)
-            # transform(self.hete_adj2)
-            # transform(self.hete_adj3)
-            # self.f_lap1 = self.hete_adj1.ndata['lap_pos_enc']
-            # self.f_lap2 = self.hete_adj2.ndata['lap_pos_enc']
-            # self.f_lap3 = self.hete_adj3.ndata['lap_pos_enc']
+            
 
             self.train_idx = train
             self.val_idx = val
@@ -216,8 +197,7 @@ class DataHandler:
 
     def load_dblp_data(self):
         features_a = sp.load_npz(self.predir + 'a_feat.npz').astype("float32")
-        # features_1 = sp.load_npz(self.predir + '/features_1.npz').toarray()
-        # features_2 = sp.load_npz(self.predir + '/features_2.npy')
+        
         features_a = t.FloatTensor(preprocess_features(features_a))
         
         apa_mat=sp.load_npz(self.predir + "apa.npz")
@@ -239,8 +219,6 @@ class DataHandler:
     def load_aminer_data(self):
         type_num = [6564, 13329, 35890]
        
-        # features_1 = sp.load_npz(self.predir + '/features_1.npz').toarray()
-        # features_2 = sp.load_npz(self.predir + '/features_2.npy')
         features_p = sp.eye(type_num[0])
         features_p=t.FloatTensor(preprocess_features(features_p))
         pap = sp.load_npz(self.predir + "pap.npz")
