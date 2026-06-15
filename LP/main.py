@@ -65,7 +65,7 @@ class Coach:
         ndcgMax = 0
         bestEpoch = 0
 
-        wait = 0# 早停等待轮数
+        wait = 0
 
         #file save setting
         log_format = '%(asctime)s %(message)s'
@@ -86,24 +86,22 @@ class Coach:
 
 
         for ep in range(0, args.epoch):
-            tstFlag = (ep % 1 == 0)# 每轮都测试
+            tstFlag = (ep % 1 == 0)
             reses = self.trainEpoch()
             log(self.makePrint('Train', ep, reses, tstFlag))
             if tstFlag:
                 reses = self.testEpoch(ep)
 
-                with open(args.data + '-convergence.txt', 'a') as f:
-                    f.write(f'Epoch:{ep}  Recall@20:{reses["Recall"]:.4f}\n')
-
+               
                 if (reses['Recall'] > recallMax):
                     recallMax = reses['Recall']
                     ndcgMax = reses['NDCG']
                     bestEpoch = ep
                     wait = 0
-                    self.saveModel()# 保存最优模型
+                    self.saveModel()
                 else:
                     wait+=1
-                # log(self.makePrint('Test', ep, reses, tstFlag))
+                
                 logger.info(self.makePrint('Test', ep, reses, tstFlag))
                 self.saveHistory()
             print()
@@ -131,15 +129,15 @@ class Coach:
             ancs = ancs.long().cuda()
             poss = poss.long().cuda()
             negs = negs.long().cuda()
-            self.opt.zero_grad() # 清空梯度
-            # 前向传播，计算损失
+            self.opt.zero_grad() 
+            
             loss,bprLoss,regLoss,diff_loss = self.model.cal_loss(ancs, poss, negs, self.handler.behavior_mats_2)
             epLoss += loss.item()
             epRecLoss += bprLoss.item()
             eDiffLoss += diff_loss.item()
 
-            loss.backward()# 反向传播
-            self.opt.step()# 更新参数
+            loss.backward()
+            self.opt.step()
             log('Step %d/%d: loss = %.3f, diffLoss = %.3f,regLoss = %.3f' % (i, steps, loss, diff_loss , regLoss), save=False, oneline=True)
 
         ret = dict()
@@ -156,7 +154,7 @@ class Coach:
         steps = num // args.tstBat
         self.model.eval()
 
-        with torch.no_grad():# 禁用梯度计算
+        with torch.no_grad():
             usrEmbeds, itmEmbeds = self.model.predict(self.handler.behavior_mats_2)
             user_emb = usrEmbeds.cpu().numpy()
             item_emb = itmEmbeds.cpu().numpy()
@@ -168,9 +166,9 @@ class Coach:
             i += 1
             usr = usr.long().cuda()
             trnMask = trnMask.cuda()
-            # 计算预测分数：屏蔽训练集已交互物品
+
             allPreds = t.mm(usrEmbeds[usr], t.transpose(itmEmbeds, 1, 0)) * (1 - trnMask) - trnMask * 1e8
-            _, topLocs = t.topk(allPreds, args.topk)# 取Top-K推荐
+            _, topLocs = t.topk(allPreds, args.topk)
             recall, ndcg = self.calcRes(topLocs.cpu().numpy(), self.handler.test_dataloader.dataset.user_pos_lists, usr)
             epRecall += recall
             epNdcg += ndcg
@@ -221,8 +219,7 @@ class Coach:
         self.model = ckp['model']
         self.opt = t.optim.Adam(self.model.parameters(), lr=args.lr, weight_decay=0)
 
-        # with open('../History/' + args.load_model + '.his', 'rb') as fs:
-        #     self.metrics = pickle.load(fs)
+        
         log('Model Loaded')
 
     def test(self):
@@ -243,8 +240,7 @@ class Coach:
 
 
 if __name__ == '__main__':
-    # os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-    #seed_torch() #for tune hyperparameter
+   
     logger.saveDefault = True
     log('Start')
     torch.cuda.set_device(args.gpu)
@@ -254,4 +250,3 @@ if __name__ == '__main__':
 
     coach = Coach(handler)
     coach.run()
-    # coach.test()
