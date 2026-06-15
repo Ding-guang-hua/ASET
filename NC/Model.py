@@ -116,27 +116,17 @@ class HGDM(nn.Module):
         return nll_loss, diff_loss, cl_loss
 
     def inter_step_triplet_loss(self, refined_emb, target_emb, source_emb, margin):
-        """
-        计算跨步三元组对比损失
-        Args:
-            refined_emb: 精炼后的表示 hat{e}_v^{r_{i+1}}, [N, d]
-            target_emb: 目标关系的初始表示 e_v^{r_{i+1}}, [N, d]
-            source_emb: 源关系的初始表示 e_v^{r_i}, [N, d]
-            margin: 边界距离 m > 0
-        Returns:
-            loss: 跨步三元组损失的平均值
-        """
-        # L2 距离
+        
         dist_pos = torch.norm(refined_emb - target_emb, p=2, dim=1)  # refined ↔ target
         dist_neg = torch.norm(refined_emb - source_emb, p=2, dim=1)  # refined ↔ source
 
-        # 三元组损失
+        
         loss = F.relu(dist_pos - dist_neg + margin)
 
         return loss.mean()
 
 
-    def get_allembeds(self, he_adjs, he_adjs_2, initial_feature):  # 对应要修改
+    def get_allembeds(self, he_adjs, he_adjs_2, initial_feature):  
         source_embeddings1, source_embeddings2, target_embedding = self.forward(he_adjs, initial_feature)
         f_laps = self.build_struct_feats(he_adjs)
         diff_embeddings1 = self.diffusion_model.p_sample(self.user_denoise_model, source_embeddings2,
@@ -276,13 +266,13 @@ class GaussianDiffusion(nn.Module):
         self.W = nn.Linear(args.latdim, args.latdim)
         self.V = nn.Linear(args.latdim, args.latdim)
 
-        # 关系感知噪声模块：根据不同关系（行为）生成图结构感知的噪声
+        
         self.rel_noise = RelationAwareNoise(
             dim=args.latdim,
-            num_relations_max=4,  # ijcai/tmall最多4种行为
+            num_relations_max=4,  
             time_emb_dim=args.d_emb_size
         ).to(device)
-        # 自适应噪声调度器：动态学习每一步的噪声强度 β_t
+        
         self.adaptive_scheduler = AdaptiveNoiseScheduler(
             dim=args.latdim,
             time_emb_dim=args.d_emb_size,
@@ -329,7 +319,7 @@ class GaussianDiffusion(nn.Module):
         self.posterior_mean_coef2 = (
                     (1.0 - self.alphas_cumprod_prev) * torch.sqrt(alphas) / (1.0 - self.alphas_cumprod))
 
-    def p_sample(self, model, x_start, steps, rel_adj_list, f_lap):# 后向去噪采样：从噪声逐步恢复原始数据
+    def p_sample(self, model, x_start, steps, rel_adj_list, f_lap):
         if steps == 0:
             x_t = x_start
         else:
@@ -352,7 +342,7 @@ class GaussianDiffusion(nn.Module):
                                          x_start.shape) * x_start + self._extract_into_tensor(
             self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
 
-    def q_sample_adaptive(self, x_start, t, noise, graph_state=None):# 自适应前向扩散：使用学习到的 α_bar 进行加噪
+    def q_sample_adaptive(self, x_start, t, noise, graph_state=None):
         base_x = x_start if graph_state is None else graph_state
         alpha_bar_t = self.adaptive_scheduler.alpha_bar_t(base_x, t)  # [N,1]
         return torch.sqrt(alpha_bar_t) * x_start + torch.sqrt(1.0 - alpha_bar_t + 1e-8) * noise
@@ -379,7 +369,7 @@ class GaussianDiffusion(nn.Module):
 
         return model_mean, model_log_variance
 
-    def anisotropy_nosie(self, x_start, rel_adj_list, timesteps):# 生成【关系感知各向异性噪声】（调用专门的噪声模型）
+    def anisotropy_nosie(self, x_start, rel_adj_list, timesteps):
         return self.rel_noise(x_start, rel_adj_list, timesteps)
 
     def training_losses2(self, model, targetEmbeds, x_start, batch, rel_adj_list, f_lap):
@@ -417,17 +407,17 @@ class RelationAwareNoise(nn.Module):
         self.num_relations_max = num_relations_max
         self.time_emb_dim = time_emb_dim
 
-        # 每个关系一个可学习嵌入 e_r
+        
         self.rel_emb = nn.Parameter(torch.randn(num_relations_max, dim) * 0.02)
 
-        # 用当前节点表示、时间步、关系嵌入共同决定 alpha_r
+       
         self.query_mlp = nn.Sequential(
             nn.Linear(dim + time_emb_dim, dim),
             nn.LeakyReLU(),
             nn.Linear(dim, dim)
         )
 
-        # 方向分解后的混合权重
+        
         self.dir_mlp = nn.Sequential(
             nn.Linear(dim + time_emb_dim, dim),
             nn.LeakyReLU(),
@@ -446,11 +436,11 @@ class RelationAwareNoise(nn.Module):
         return emb
 
     def relation_stats(self, x, adj2):
-        # x: [N, d], adj2: [N, N] dense/sparse
+       
         sum_neighbors = adj2 @ x
-        # num_neighbors = adj2.sum(dim=1).clamp(min=1.0)
+        
         row_sum = adj2.sum(dim=1)
-        if hasattr(row_sum, "to_dense"):  # 稀疏求和结果有时仍是稀疏/特殊张量
+        if hasattr(row_sum, "to_dense"):  
             row_sum = row_sum.to_dense()
         num_neighbors = row_sum.reshape(-1, 1).clamp(min=1.0)
         mu = sum_neighbors / num_neighbors
@@ -473,7 +463,7 @@ class RelationAwareNoise(nn.Module):
             mu_r, sigma_r = self.relation_stats(x, adj2)
             rel_stats_cache.append((mu_r, sigma_r))
 
-            # 不要 expand，直接广播
+            
             score_r = (q * self.rel_emb[rid]).sum(dim=-1, keepdim=True)
             scores.append(score_r)
 
