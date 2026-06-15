@@ -27,31 +27,31 @@ class RL_Agent(nn.Module):
         self.policy_net = PolicyNetwork(self.n_hid, self.rel_num, hidden_dim=64).to(device)
         self.proxy_reward = ProxyRewardModel(input_dim=self.n_hid+2).to(device)
 
-        self.gamma = 0.95  # 折扣因子（若多步奖励则使用，这里单步可设为1）
+        self.gamma = 0.95  
 
     def train_step(self, rel_embed, rel_id, relation_adjs, distinct_req):
         self.train()
 
         states, actions, rewards = [], [], []
-        r_seq = [rel_id] # 记录已经选过的关系（防止重复）
-        total_reward = 0.0# 总奖励
+        r_seq = [rel_id] 
+        total_reward = 0.0
 
         for t in range(self.rel_num):
 
             state = self.state_encoder(r_seq, relation_adjs, distinct_req)
-            action_probs, _ = self.policy_net(state)# 策略网络输出动作概率
+            action_probs, _ = self.policy_net(state)
 
-            # 选择没有选过的关系
+            
             available_actions = [r-1 for r in self.rel_ids if r not in r_seq]
             if not available_actions:
                 break
-            # 采样动作
+            
             available_probs = action_probs[0, available_actions]
             available_probs = available_probs / (available_probs.sum() + 1e-8)
             action_idx = torch.multinomial(available_probs, 1).item()
             selected_rid = available_actions[action_idx]+1
 
-            # 奖励计算
+            
             distinct_r = distinct_req[selected_rid-1]
             sim_r_prev = compute_sim(relation_adjs[r_seq[-1]],relation_adjs[selected_rid])
 
@@ -60,14 +60,13 @@ class RL_Agent(nn.Module):
             reward_input = torch.cat([state, features], dim=1)
             reward = self.proxy_reward(reward_input)
 
-            # 保存轨迹
+            
             r_seq.append(selected_rid)
             states.append(state)
             actions.append(selected_rid)
             rewards.append(reward.item())
             total_reward += reward.item()
-        # print(r_seq)
-        # 策略梯度损失
+        
         policy_loss = torch.tensor(0.0, device=device, requires_grad=True)
         discounted_reward = 0.0
         if len(rewards) > 0:
@@ -76,45 +75,41 @@ class RL_Agent(nn.Module):
                 action_probs, _ = self.policy_net(states[t])
                 log_prob = torch.log(action_probs[0, actions[t]-1] + 1e-8)
                 policy_loss = policy_loss - log_prob * discounted_reward
-        # print(type(policy_loss))
+        
 
         avg_reward = total_reward / len(rewards) if len(rewards) > 0 else 0.0
         return policy_loss, avg_reward
 
 
-class ProxyRewardModel(nn.Module): #代理奖励模型（MLP）
-    """
-        代理奖励模型（MLP）
-        输入：候选关系特征（区分度、相似度、信息增益） + 当前状态向量
-        输出：0~1 之间的代理奖励分数
-        """
+class ProxyRewardModel(nn.Module): 
+ 
 
     def __init__(self, input_dim, hidden_dim=32):
         super().__init__()
         self.mlp = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim // 2),  # 加深一层，更稳定
+            nn.Linear(hidden_dim, hidden_dim // 2),  
             nn.ReLU(),
-            nn.Linear(hidden_dim // 2, 1)  # 最后不加Sigmoid，训练更稳定
+            nn.Linear(hidden_dim // 2, 1)  
         )
-        # 输出用 Sigmoid 映射到 0~1
+
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        # x = 状态向量 + 候选关系特征
+
         score = self.mlp(x)
         reward = self.sigmoid(score)
-        return reward.squeeze(-1)  # (batch,) → 奖励标量
+        return reward.squeeze(-1) 
 
 
-class CosStateEncoder(nn.Module): # 状态编码
-    # 将当前CoS片段的关系嵌入、关系区分度的池化、与上一个关系的相似性编码为状态向量。
+class CosStateEncoder(nn.Module): 
+
     def __init__(self, rel_num, embed_dim, out_dim=16):
         super().__init__()
-        self.embedding_layer = nn.Embedding(num_embeddings=rel_num, embedding_dim=embed_dim)# 关系嵌入层
+        self.embedding_layer = nn.Embedding(num_embeddings=rel_num, embedding_dim=embed_dim)
 
-        self.sim_proj = nn.Linear(1, embed_dim)  # 相似度：1维 → 映射到 hidden_dim
+        self.sim_proj = nn.Linear(1, embed_dim)  
 
         self.fusion = nn.Linear(embed_dim + 1 + embed_dim, out_dim)
 
@@ -129,8 +124,8 @@ class CosStateEncoder(nn.Module): # 状态编码
             dist_score = distinct_req[rid-1]
             distinct_scores.append(dist_score)
         distinct_tensor = torch.tensor(distinct_scores, device=device)
-        # 对 Distinct 列表做池化 (这里使用均值，也可改为 max)
-        distinct_pooled = torch.mean(distinct_tensor)  # 标量 [1]
+
+        distinct_pooled = torch.mean(distinct_tensor)  
         distinct_pooled = distinct_pooled.unsqueeze(0)
 
         if len(rel_seq) == 1:
@@ -149,12 +144,7 @@ class CosStateEncoder(nn.Module): # 状态编码
         return state
 
 
-class PolicyNetwork(nn.Module): # 策略网络
-    """
-        策略网络：
-        输入：状态向量（来自 CosStateEncoder）
-        输出：下一个关系的选择概率（36个关系 → 对应动作）
-        """
+class PolicyNetwork(nn.Module):
 
     def __init__(self, state_dim, action_dim, hidden_dim=32):
         super().__init__()
@@ -164,10 +154,9 @@ class PolicyNetwork(nn.Module): # 策略网络
             nn.Linear(hidden_dim, hidden_dim // 2),
             nn.ReLU(),
             nn.Linear(hidden_dim // 2, action_dim)
-            # 注意：Softmax 放在 forward 外面或计算 loss 时更稳定
         )
 
     def forward(self, state):
-        logits = self.fc(state)  # 原始输出分数
-        probs = torch.softmax(logits, dim=-1)  # 概率分布
+        logits = self.fc(state)  
+        probs = torch.softmax(logits, dim=-1)  
         return probs, logits
