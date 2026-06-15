@@ -17,11 +17,11 @@ device = t.device('cuda' if t.cuda.is_available() else 'cpu')
 
 def seed_torch(seed):
 	random.seed(seed)
-	os.environ['PYTHONHASHSEED'] = str(seed) # 为了禁止hash随机化，使得实验可复现
+	os.environ['PYTHONHASHSEED'] = str(seed) 
 	np.random.seed(seed)
 	t.manual_seed(seed)
 	t.cuda.manual_seed(seed)
-	t.cuda.manual_seed_all(seed) # if you are using multi-GPU.
+	t.cuda.manual_seed_all(seed) 
 	t.backends.cudnn.benchmark = False
 	t.backends.cudnn.deterministic = True
 
@@ -72,8 +72,7 @@ class Coach:
                 fh.setFormatter(logging.Formatter(log_format))
                 logger = logging.getLogger()
                 logger.addHandler(fh)
-                # logger.info(args)
-                # logger.info('================')  
+                
                 args.save_path = log_file 
 
                 val_accs = []
@@ -167,8 +166,7 @@ class Coach:
             self.opt.zero_grad()
             loss.backward()
             self.opt.step()
-            # log('Step %d/%d: bceloss = %.3f, diffloss = %.3f    ' % (i, steps, nll_loss,diffloss), save=False,
-            #     oneline=True)
+            
         ret = dict()
         ret['bceLoss'] = epBCELoss / steps
         ret['diffLoss'] = epDFLoss / steps
@@ -183,12 +181,7 @@ class Coach:
         with t.no_grad():
 
             embeds,scores = self.model.get_allembeds(self.handler.he_adjs, self.handler.he_adjs_2, self.initial_feature)
-            # print("embeds shape:", embeds.shape)
-            # print("scores shape:", scores.shape)
-            # print("labels shape:", labels.shape)
-            # print("max train idx:", max(self.train_idx[i]))
-            # print("max val idx:", max(self.val_idx[i]))
-            # print("max test idx:", max(self.test_idx[i]))
+            
             val_acc,val_f1_macro,val_f1_micro,test_acc,test_f1_macro,test_f1_micro,test_logits=evaluate(embeds,scores, args.ratio[i], self.train_idx[i], self.val_idx[i], self.test_idx[i], labels, self.nbclasses)
             val_ret = dict()
             val_ret['acc'] = val_acc
@@ -226,8 +219,7 @@ class Coach:
 
 
 if __name__ == '__main__':
-    # os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-    #seed_torch() #for tune hyperparameter
+    
     torch.cuda.set_device(args.gpu)
     logger.saveDefault = True
     log('Start')
@@ -237,4 +229,4 @@ if __name__ == '__main__':
 
     coach = Coach(handler)
     coach.run()
-    # coach.test()
+    
