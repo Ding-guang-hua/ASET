@@ -1,5 +1,4 @@
-# Learning Adaptive Semantic Evolution Trajectories in
-Heterogeneous Graphs
+# Learning Adaptive Semantic Evolution Trajectories in Heterogeneous Graphs
 
 ![ASRD](./ASRD.png)
 
