@@ -1,4 +1,5 @@
-# ASRD: RL-Driven Adaptive Semantic Residual Diffusion for Heterogeneous Graph Learning
+# Learning Adaptive Semantic Evolution Trajectories in
+Heterogeneous Graphs
 
 ![ASRD](./ASRD.png)
 
