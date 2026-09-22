@@ -1,6 +1,6 @@
 # Learning Adaptive Semantic Evolution Trajectories in Heterogeneous Graphs
 
-![ASRD](./ASRD.png)
+![ASRD](./ASET.png)
 
 ## 📝 Environment
 
